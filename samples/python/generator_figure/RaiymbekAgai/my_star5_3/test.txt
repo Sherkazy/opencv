@@ -1,0 +1,2 @@
+Number of figures=10 n=100 m=100 Number of Corners=10
+Pixels(n*m)=10000 Сlarity=0.1 Clarity*n*m>1000.0 np.sqrt(Clarity*n*m)>31.622776601683793

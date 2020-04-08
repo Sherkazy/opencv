@@ -23,13 +23,14 @@ Usage:
    digits.py
 '''
 
-
 # Python 2/3 compatibility
 from __future__ import print_function
 
+from random import shuffle
+
 import numpy as np
 import cv2 as cv
-
+from samples.python import train_img_loader, test_img_loader
 # built-in modules
 from multiprocessing.pool import ThreadPool
 
@@ -38,41 +39,42 @@ from numpy.linalg import norm
 # local modules
 from common import clock, mosaic
 
-
-
-SZ = 20 # size of each digit is SZ x SZ
-CLASS_N = 10
+SZ = 100  # size of each digit is SZ x SZ
+CLASS_N = 4
 DIGITS_FN = 'digits.png'
+
 
 def split2d(img, cell_size, flatten=True):
     h, w = img.shape[:2]
     sx, sy = cell_size
-    cells = [np.hsplit(row, w//sx) for row in np.vsplit(img, h//sy)]
+    cells = [np.hsplit(row, w // sx) for row in np.vsplit(img, h // sy)]
     cells = np.array(cells)
     if flatten:
         cells = cells.reshape(-1, sy, sx)
     return cells
+
 
 def load_digits(fn):
     fn = cv.samples.findFile(fn)
     print('loading "%s" ...' % fn)
     digits_img = cv.imread(fn, cv.IMREAD_GRAYSCALE)
     digits = split2d(digits_img, (SZ, SZ))
-    labels = np.repeat(np.arange(CLASS_N), len(digits)/CLASS_N)
+    labels = np.repeat(np.arange(CLASS_N), len(digits) / CLASS_N)
     return digits, labels
+
 
 def deskew(img):
     m = cv.moments(img)
     if abs(m['mu02']) < 1e-2:
         return img.copy()
-    skew = m['mu11']/m['mu02']
-    M = np.float32([[1, skew, -0.5*SZ*skew], [0, 1, 0]])
+    skew = m['mu11'] / m['mu02']
+    M = np.float32([[1, skew, -0.5 * SZ * skew], [0, 1, 0]])
     img = cv.warpAffine(img, M, (SZ, SZ), flags=cv.WARP_INVERSE_MAP | cv.INTER_LINEAR)
     return img
 
 
 class KNearest(object):
-    def __init__(self, k = 3):
+    def __init__(self, k=3):
         self.k = k
         self.model = cv.ml.KNearest_create()
 
@@ -89,8 +91,9 @@ class KNearest(object):
     def save(self, fn):
         self.model.save(fn)
 
+
 class SVM(object):
-    def __init__(self, C = 1, gamma = 0.5):
+    def __init__(self, C=1, gamma=0.5):
         self.model = cv.ml.SVM_create()
         self.model.setGamma(gamma)
         self.model.setC(C)
@@ -109,28 +112,32 @@ class SVM(object):
     def save(self, fn):
         self.model.save(fn)
 
-def evaluate_model(model, digits, samples, labels):
+
+def evaluate_model(model, samples, labels):
     resp = model.predict(samples)
     err = (labels != resp).mean()
-    print('error: %.2f %%' % (err*100))
+    print('error: %.2f %%' % (err * 100))
 
-    confusion = np.zeros((10, 10), np.int32)
+    confusion = np.zeros((4, 4), np.int32)
     for i, j in zip(labels, resp):
         confusion[i, int(j)] += 1
     print('confusion matrix:')
     print(confusion)
     print()
 
-    vis = []
-    for img, flag in zip(digits, resp == labels):
-        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
-        if not flag:
-            img[...,:2] = 0
-        vis.append(img)
-    return mosaic(25, vis)
+    # vis = []
+    # for img, flag in zip(digits, resp == labels):
+    #     img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    #     if not flag:
+    #         img[...,:2] = 0
+    #     vis.append(img)
+    # return mosaic(10, vis)
+    return True
+
 
 def preprocess_simple(digits):
-    return np.float32(digits).reshape(-1, SZ*SZ) / 255.0
+    return np.float32(digits).reshape(-1, SZ * SZ) / 255.0
+
 
 def preprocess_hog(digits):
     samples = []
@@ -139,9 +146,9 @@ def preprocess_hog(digits):
         gy = cv.Sobel(img, cv.CV_32F, 0, 1)
         mag, ang = cv.cartToPolar(gx, gy)
         bin_n = 16
-        bin = np.int32(bin_n*ang/(2*np.pi))
-        bin_cells = bin[:10,:10], bin[10:,:10], bin[:10,10:], bin[10:,10:]
-        mag_cells = mag[:10,:10], mag[10:,:10], mag[:10,10:], mag[10:,10:]
+        bin = np.int32(bin_n * ang / (2 * np.pi))
+        bin_cells = bin[:10, :10], bin[10:, :10], bin[:10, 10:], bin[10:, 10:]
+        mag_cells = mag[:10, :10], mag[10:, :10], mag[:10, 10:], mag[10:, 10:]
         hists = [np.bincount(b.ravel(), m.ravel(), bin_n) for b, m in zip(bin_cells, mag_cells)]
         hist = np.hstack(hists)
 
@@ -156,38 +163,55 @@ def preprocess_hog(digits):
 
 
 if __name__ == '__main__':
-    print(__doc__)
+    # print(__doc__)
 
-    digits, labels = load_digits(DIGITS_FN)
-
+    # digits, labels = load_digits(DIGITS_FN)
+    digits, labels = train_img_loader.img_loader(True, True)
     print('preprocessing...')
-    # shuffle digits
-    rand = np.random.RandomState(321)
-    shuffle = rand.permutation(len(digits))
-    digits, labels = digits[shuffle], labels[shuffle]
+    print(len(digits))
 
+    # cv.imshow('test set', mosaic(25, digits[0]))
+    # cv.imshow('window_name', digits[20])
     digits2 = list(map(deskew, digits))
+    # # print(digits2[0])
     samples = preprocess_hog(digits2)
+    # #
+    # train_n = int(0.99*len(samples))
+    # cv.imshow('test set', mosaic(25, digits[train_n:]))
+    # digits_train, digits_test = np.split(digits2, [train_n])
+    # samples_train, samples_test = np.split(samples, [train_n])
+    # labels_train, labels_test = np.split(labels, [train_n])
+    # print(type(np.array(labels)), type(labels_train))
+    # my code start
 
-    train_n = int(0.9*len(samples))
-    cv.imshow('test set', mosaic(25, digits[train_n:]))
-    digits_train, digits_test = np.split(digits2, [train_n])
-    samples_train, samples_test = np.split(samples, [train_n])
-    labels_train, labels_test = np.split(labels, [train_n])
+    digits_train = digits2
+    samples_train = samples
+    labels_train = np.array(labels)
+    samples_test, labels_test, length_figure = test_img_loader.load_img(False,True)
+    print(len(samples_test))
+    samples_test2 = list(map(deskew, samples_test))
+    samples_test = preprocess_hog(samples_test2)
+    # print(type(np.array(labels)), type(labels_train))
 
+    # my code end
 
+    # print(digits2[40][50], len(digits_train[0]))
+    # print(len(labels_train))
+    # print(len(samples_train))
+    #
+    #
     print('training KNearest...')
     model = KNearest(k=4)
     model.train(samples_train, labels_train)
-    vis = evaluate_model(model, digits_test, samples_test, labels_test)
-    cv.imshow('KNearest test', vis)
-
+    vis = evaluate_model(model, samples_test, np.array(labels_test))
+    # cv.imshow('KNearest test', vis)
+    #
     print('training SVM...')
     model = SVM(C=2.67, gamma=5.383)
     model.train(samples_train, labels_train)
-    vis = evaluate_model(model, digits_test, samples_test, labels_test)
-    cv.imshow('SVM test', vis)
-    print('saving SVM as "digits_svm.dat"...')
-    model.save('digits_svm.dat')
-
+    vis = evaluate_model(model,  samples_test, np.array(labels_test))
+    # cv.imshow('SVM test', vis)
+    # print('saving SVM as "digits_svm.dat"...')
+    # model.save('digits_svm.dat')
+    #
     cv.waitKey(0)

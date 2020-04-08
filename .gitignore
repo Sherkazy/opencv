@@ -4,6 +4,7 @@
 
 *.autosave
 *.pyc
+*.png
 *.user
 *~
 Thumbs.db
