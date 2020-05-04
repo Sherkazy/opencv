@@ -35,6 +35,8 @@ from samples.python import train_img_loader, test_img_loader
 from multiprocessing.pool import ThreadPool
 
 from numpy.linalg import norm
+import datetime
+import time
 
 # local modules
 from common import clock, mosaic
@@ -93,7 +95,7 @@ class KNearest(object):
 
 
 class SVM(object):
-    def __init__(self, C=1, gamma=0.5):
+    def __init__(self, C=5, gamma=0.5):
         self.model = cv.ml.SVM_create()
         self.model.setGamma(gamma)
         self.model.setC(C)
@@ -166,7 +168,7 @@ if __name__ == '__main__':
     # print(__doc__)
 
     # digits, labels = load_digits(DIGITS_FN)
-    digits, labels = train_img_loader.img_loader(True, True)
+    digits, labels = train_img_loader.img_loader(1)  # 1 - trained 1px photos, 2- 3px, 3 - closed figures
     print('preprocessing...')
     print(len(digits))
 
@@ -187,7 +189,7 @@ if __name__ == '__main__':
     digits_train = digits2
     samples_train = samples
     labels_train = np.array(labels)
-    samples_test, labels_test, length_figure = test_img_loader.load_img(False,True)
+    samples_test, labels_test, length_figure = test_img_loader.load_img(3)  # 1 - trained 1px photos, 2- 3px, 3 - closed figures
     print(len(samples_test))
     samples_test2 = list(map(deskew, samples_test))
     samples_test = preprocess_hog(samples_test2)
@@ -200,18 +202,39 @@ if __name__ == '__main__':
     # print(len(samples_train))
     #
     #
+
+    epochs = 7
+
+    start = time.time()
     print('training KNearest...')
     model = KNearest(k=4)
-    model.train(samples_train, labels_train)
+
+    for e in range(0, epochs):
+        print(" (Epoch " + str(e + 1) + "/" + str(epochs) + ")")
+        model.train(samples_train, labels_train)
+
+    end = time.time()
+    end_time = datetime.datetime.now()
+    # print(start_time.ctime(), end_time.ctime())
+    print("Time to process: " + str(end - start))
+
     vis = evaluate_model(model, samples_test, np.array(labels_test))
+
     # cv.imshow('KNearest test', vis)
     #
+    start = time.time()
     print('training SVM...')
     model = SVM(C=2.67, gamma=5.383)
-    model.train(samples_train, labels_train)
+    for e in range(0, epochs):
+        print(" (Epoch " + str(e + 1) + "/" + str(epochs) + ")")
+        model.train(samples_train, labels_train)
+
+    end = time.time()
     vis = evaluate_model(model,  samples_test, np.array(labels_test))
     # cv.imshow('SVM test', vis)
     # print('saving SVM as "digits_svm.dat"...')
     # model.save('digits_svm.dat')
     #
+    end_time = datetime.datetime.now()
+    print("Time to process: " + str(end - start))
     cv.waitKey(0)
